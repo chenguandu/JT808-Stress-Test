@@ -79,8 +79,11 @@ public class DeviceConnection {
     public void startHeartbeat(long intervalSec) {
         stopHeartbeat();
         this.heartbeatFuture = channel.eventLoop().scheduleAtFixedRate(
-                () -> channel.writeAndFlush(
-                        JT808MessageBuilder.buildHeartbeat(phone, nextSerialNo())),
+                () -> {
+                    channel.writeAndFlush(
+                            JT808MessageBuilder.buildHeartbeat(phone, nextSerialNo()));
+                    stats.incHeartbeatSent();
+                },
                 intervalSec,
                 intervalSec,
                 TimeUnit.SECONDS);

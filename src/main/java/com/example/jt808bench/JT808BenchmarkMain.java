@@ -11,6 +11,7 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.timeout.IdleStateHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -97,6 +98,8 @@ public class JT808BenchmarkMain {
                     @Override
                     protected void initChannel(SocketChannel ch) {
                         ch.pipeline()
+                                .addLast("idle", new IdleStateHandler(
+                                        config.getServerTimeoutSec() * 3, 0, 0, TimeUnit.SECONDS))
                                 .addLast("frameDecoder", new JT808FrameCodec.Decoder())
                                 .addLast("frameEncoder", new JT808FrameCodec.Encoder())
                                 .addLast("handler", new JT808ClientHandler(

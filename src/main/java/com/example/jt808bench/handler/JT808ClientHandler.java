@@ -8,6 +8,8 @@ import com.example.jt808bench.protocol.JT808MessageBuilder;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.handler.timeout.IdleState;
+import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.util.AttributeKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -172,7 +174,7 @@ public class JT808ClientHandler extends SimpleChannelInboundHandler<JT808Message
     }
 
     // ============================================================
-    // 0x8001 通用应答 → 检查是否为鉴权应答成功
+    // 0x8001 通用应答 → 鉴权成功 / 心跳确认
     // ============================================================
     private void handleGeneralResponse(DeviceConnection conn, JT808Message msg) {
         byte[] body = msg.getBody();
@@ -189,6 +191,9 @@ public class JT808ClientHandler extends SimpleChannelInboundHandler<JT808Message
         if (replyMsgId == 0x0102 && result == 0 && conn.getState() == DeviceState.AUTHENTICATING) {
             // 鉴权成功
             enterHeartbeat(conn);
+        } else if (replyMsgId == 0x0002) {
+            // 心跳应答
+            conn.getStats().incHeartbeatAck();
         }
     }
 
@@ -232,5 +237,23 @@ public class JT808ClientHandler extends SimpleChannelInboundHandler<JT808Message
             log.debug("[{}] exceptionCaught: {}", phone, cause.getMessage());
         }
         // 不关闭连接，让 Netty 自己处理或等待 channelInactive
+    }
+
+    // ============================================================
+    // 空闲检测 → 半开连接清理
+    // ============================================================
+    @Override
+    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) {
+        if (evt instanceof IdleStateEvent e) {
+            if (e.state() == IdleState.READER_IDLE) {
+                DeviceConnection conn = ctx.channel().attr(ATTR_CONN).get();
+                if (conn != null) {
+                    log.warn("[{}] reader idle for {}s, closing dead connection",
+                            conn.getPhone(),
+                            heartbeatIntervalSec + 10);
+                }
+                ctx.close();
+            }
+        }
     }
 }
